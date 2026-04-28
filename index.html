@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>🏍️ MOTIK RACING - Гонка на мотоциклах!</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Courier New', 'Orbitron', 'Segoe UI', monospace;
+            overflow: hidden;
+        }
+
+        .game-wrapper {
+            background: radial-gradient(circle at 30% 20%, #0f0f1a, #050508);
+            padding: 20px;
+            border-radius: 48px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.8), inset 0 1px 2px rgba(255,255,255,0.1);
+            border: 2px solid #ff6600;
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            border-radius: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            cursor: none;
+            background: #0a0f1a;
+        }
+
+        .dashboard {
+            margin-top: 18px;
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .stats-panel {
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(12px);
+            border-radius: 20px;
+            padding: 12px 20px;
+            flex: 1;
+            min-width: 180px;
+            border-left: 6px solid #ff6600;
+            color: #ffe6cc;
+            font-weight: bold;
+            font-size: 0.9rem;
+            text-shadow: 0 2px 3px black;
+        }
+
+        .motik-name {
+            font-size: 1.3rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #ffaa44, #ff6600);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        button {
+            background: #2a2a35;
+            border: none;
+            color: #ffaa66;
+            font-weight: bold;
+            padding: 10px 20px;
+            border-radius: 50px;
+            font-family: monospace;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: 0.08s linear;
+            box-shadow: 0 5px 0 #0f0f15;
+            margin: 4px;
+        }
+
+        button:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 0 #0f0f15;
+        }
+
+        .btn-nitro {
+            background: linear-gradient(135deg, #ff8800, #ff4400);
+            color: white;
+            box-shadow: 0 5px 0 #882200;
+            font-weight: bold;
+        }
+
+        .controls-info {
+            background: #000000aa;
+            border-radius: 20px;
+            padding: 8px 18px;
+            font-size: 0.7rem;
+            letter-spacing: 1px;
+            font-family: monospace;
+        }
+
+        @keyframes nitroFlash {
+            0% { text-shadow: 0 0 0px cyan; }
+            100% { text-shadow: 0 0 15px cyan; }
+        }
+        .nitro-active {
+            animation: nitroFlash 0.1s infinite;
+        }
+    </style>
+</head>
+<body>
+<div>
+    <div class="game-wrapper">
+        <canvas id="gameCanvas" width="900" height="550" style="width:100%; height:auto; max-width:900px; aspect-ratio:900/550"></canvas>
+        
+        <div class="dashboard">
+            <div class="stats-panel">
+                🏍️ <span id="motikName" class="motik-name">ГОНЩИК</span><br>
+                ⚡ Скорость: <span id="speedValue">0</span> км/ч &nbsp;| 🏆 Очки: <span id="scoreValue">0</span><br>
+                💨 Нитро: <span id="nitroValue">100</span>% &nbsp;| 💥 Живучесть: <span id="healthValue">3</span><br>
+                🏁 Рекорд: <span id="recordValue">0</span>
+            </div>
+            <div class="stats-panel">
+                🎮 УПРАВЛЕНИЕ<br>
+                ◀️ ▶️ - движение | ⬆️ - газ | ⬇️ - тормоз<br>
+                [SPACE] или [N] - НИТРО УСКОРЕНИЕ!
+            </div>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-top: 12px;">
+            <button id="resetGameBtn">🔄 НОВАЯ ГОНКА</button>
+            <button id="buyNitroBtn" style="background:#884400;">💊 Купить нитро (500 очков)</button>
+            <button id="upgradeBikeBtn">🔧 Апгрейд мотоцикла (800 очков)</button>
+        </div>
+        <div class="controls-info" style="text-align: center; margin-top: 12px;">
+            🏍️ МОТИКИ РУЛЯТ! Уклоняйся от машин и ям, собирай бензин, круши рекорды!
+        </div>
+    </div>
+</div>
+
+<script>
+    (function(){
+        // ---------- МОЩНАЯ ГОНОЧНАЯ ИГРА "MOTIK RACING" ----------
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Размеры дороги и игрока
+        const LANE_COUNT = 5;
+        const LANE_WIDTH = canvas.width / LANE_COUNT;
+        let playerLane = 2;    // 0-4
+        let playerX = playerLane * LANE_WIDTH + LANE_WIDTH/2 - 20;
+        
+        // Игровой мир
+        let gameRunning = true;
+        let score = 0;
+        let highScore = localStorage.getItem('motoHighScore') ? parseInt(localStorage.getItem('motoHighScore')) : 0;
+        let health = 3;
+        
+        // Характеристики мотика
+        let motoLevel = 1;
+        let baseSpeed = 6;
+        let currentSpeed = baseSpeed;
+        let nitro = 100;
+        let nitroBoost = false;
+        let nitroDecay = 0;
+        let upgradePrice = 800;
+        let nitroPrice = 500;
+        
+        // Объекты на дороге
+        let obstacles = [];     // препятствия {x, y, width, height, type, hit}
+        let powerups = [];      // бонусы {x, y, type}
+        let rivals = [];        // мотики-соперники
+        
+        // Визуальный сдвиг
+        let roadOffset = 0;
+        let frames = 0;
+        
+        // Имена мотиков (прогрессия)
+        const motikNames = ["🟢 Юный Мотик", "🔵 Шустрый Мотик", "🟣 Профи Мотик", "🟠 Легенда Мотик", "🔴 Абсолютный Мотик"];
+        
+        function getMotikName() {
+            let idx = Math.min(motoLevel-1, motikNames.length-1);
+            if(motoLevel > motikNames.length) return "🏆 Божественный Мотик";
+            return motikNames[idx];
+        }
+        
+        function updateUI() {
+            document.getElementById('motikName').innerHTML = getMotikName() + ` Lv.${motoLevel}`;
+            document.getElementById('speedValue').innerHTML = Math.floor(currentSpeed * 9);
+            document.getElementById('scoreValue').innerHTML = score;
+            document.getElementById('nitroValue').innerHTML = Math.floor(nitro);
+            document.getElementById('healthValue').innerHTML = health;
+            document.getElementById('recordValue').innerHTML = highScore;
+        }
+        
+        // Апдейт рекорда
+        function checkHighScore() {
+            if(score > highScore) {
+                highScore = score;
+                localStorage.setItem('motoHighScore', highScore);
+                updateUI();
+                return true;
+            }
+            return false;
+        }
+        
+        // Генерация препятствий
+        function generateObstacle() {
+            if(!gameRunning) return;
+            let lane = Math.floor(Math.random() * LANE_COUNT);
+            let type = Math.random();
+            let obs = {
+                x: lane * LANE_WIDTH + 10,
+                y: -60,
+                width: LANE_WIDTH - 20,
+                height: 45,
+                type: (type < 0.7) ? 'car' : 'pothole',
+                hit: false
+            };
+            obstacles.push(obs);
+        }
+        
+        function generatePowerup() {
+            if(!gameRunning) return;
+            if(Math.random() < 0.018) {
+                let lane = Math.floor(Math.random() * LANE_COUNT);
+                let pType = Math.random() < 0.6 ? 'fuel' : 'coin';
+                powerups.push({
+                    x: lane * LANE_WIDTH + 15,
+                    y: -50,
+                    width: 30,
+                    height: 30,
+                    type: pType
+                });
+            }
+        }
+        
+        function generateRival() {
+            if(!gameRunning) return;
+            if(Math.random() < 0.012 && rivals.length < 2) {
+                let lane = Math.floor(Math.random() * LANE_COUNT);
+                rivals.push({
+                    x: lane * LANE_WIDTH + 10,
+                    y: -80,
+                    width: LANE_WIDTH - 20,
+                    height: 50,
+                    speed: 3.5 + Math.random() * 4,
+                    name: "🏍️ Соперник"
+                });
+            }
+        }
+        
+        // Обновление логики
+        function updateGame() {
+            if(!gameRunning) return;
+            
+            // --- Управление скоростью и нитро ---
+            let gas = keys.ArrowUp;
+            let brake = keys.ArrowDown;
+            let targetSpd = baseSpeed;
+            if(gas) targetSpd = baseSpeed + 2.8;
+            if(brake) targetSpd = Math.max(2, baseSpeed - 3.2);
+            
+            if(nitroBoost && nitro > 0.5 && gameRunning) {
+                targetSpd += 7.5;
+                nitro -= 0.9;
+                if(nitro <= 0) {
+                    nitroBoost = false;
+                    nitro = 0;
+                }
+            } else {
+                nitroBoost = false;
+                if(nitro < 100 && !gas && !brake) nitro += 0.2;
+                if(nitro > 100) nitro = 100;
+            }
+            
+            currentSpeed = currentSpeed * 0.94 + targetSpd * 0.06;
+            if(currentSpeed < 2) currentSpeed = 2;
+            let scrollSpeed = currentSpeed;
+            
+            // Движение объектов
+            for(let i=0; i<obstacles.length; i++) {
+                obstacles[i].y += scrollSpeed;
+            }
+            for(let i=0; i<powerups.length; i++) {
+                powerups[i].y += scrollSpeed;
+            }
+            for(let i=0; i<rivals.length; i++) {
+                rivals[i].y += scrollSpeed * 0.9 + rivals[i].speed * 0.3;
+            }
+            
+            // Удаление вышедших
+            obstacles = obstacles.filter(o => o.y < canvas.height + 100);
+            powerups = powerups.filter(p => p.y < canvas.height + 80);
+            rivals = rivals.filter(r => r.y < canvas.height + 120);
+            
+            // Коллизия с препятствиями (урон)
+            let playerRect = { x: playerLane * LANE_WIDTH + 5, y: canvas.height - 85, width: LANE_WIDTH - 10, height: 65 };
+            
+            for(let i=0; i<obstacles.length; i++) {
+                let obs = obstacles[i];
+                let obsRect = { x: obs.x, y: obs.y, width: obs.width, height: obs.height };
+                if(!obs.hit && playerRect.x < obsRect.x+obsRect.width && playerRect.x+playerRect.width > obsRect.x &&
+                   playerRect.y < obsRect.y+obsRect.height && playerRect.y+playerRect.height > obsRect.y) {
+                    obs.hit = true;
+                    health--;
+                    if(health <= 0) {
+                        gameRunning = false;
+                        checkHighScore();
+                        addGameOverMsg();
+                    }
+                    updateUI();
+                    if(gameRunning) {
+                        // эффект замедления
+                        currentSpeed = Math.max(3, currentSpeed - 3);
+                    }
+                }
+            }
+            
+            // Бонусы
+            for(let i=0; i<powerups.length; i++) {
+                let p = powerups[i];
+                let pRect = { x: p.x, y: p.y, width: p.width, height: p.height };
+                if(playerRect.x < pRect.x+pRect.width && playerRect.x+playerRect.width > pRect.x &&
+                   playerRect.y < pRect.y+pRect.height && playerRect.y+playerRect.height > pRect.y) {
+                    if(p.type === 'fuel') {
+                        nitro = Math.min(100, nitro + 35);
+                    } else if(p.type === 'coin') {
+                        score += 50;
+                        updateUI();
+                    }
+                    powerups.splice(i,1);
+                    i--;
+                }
+            }
+            
+            // Соперники - при столкновении штраф, но можно обгонять ради очков
+            for(let i=0; i<rivals.length; i++) {
+                let r = rivals[i];
+                let rRect = { x: r.x, y: r.y, width: r.width, height: r.height };
+                if(playerRect.x < rRect.x+rRect.width && playerRect.x+playerRect.width > rRect.x &&
+                   playerRect.y < rRect.y+rRect.height && playerRect.y+playerRect.height > rRect.y) {
+                    health--;
+                    score = Math.max(0, score - 30);
+                    rivals.splice(i,1);
+                    i--;
+                    updateUI();
+                    if(health <= 0) {
+                        gameRunning = false;
+                        checkHighScore();
+                    }
+                    currentSpeed = Math.max(3, currentSpeed-2.5);
+                }
+            }
+            
+            // Начисление очков за выживание
+            score += Math.floor(scrollSpeed * 0.4);
+            updateUI();
+            
+            // Генерация нового контента
+            if(frames % 35 === 0) generateObstacle();
+            if(frames % 70 === 0) generatePowerup();
+            if(frames % 110 === 0) generateRival();
+            
+            // Увеличение сложности с ростом очков
+            baseSpeed = 5.4 + Math.floor(score / 2800);
+            if(baseSpeed > 12) baseSpeed = 12;
+            
+            frames++;
+        }
+        
+        // Управление клавишами
+        let keys = { ArrowLeft: false, ArrowRight: false, ArrowUp: false, ArrowDown: false, Space: false };
+        window.addEventListener('keydown', (e) => {
+            if(e.key === 'ArrowLeft') keys.ArrowLeft = true;
+            if(e.key === 'ArrowRight') keys.ArrowRight = true;
+            if(e.key === 'ArrowUp') keys.ArrowUp = true;
+            if(e.key === 'ArrowDown') keys.ArrowDown = true;
+            if(e.key === ' ' || e.key === 'Space' || e.key === 'n' || e.key === 'N') {
+                e.preventDefault();
+                if(gameRunning && nitro >= 10 && !nitroBoost) {
+                    nitroBoost = true;
+                }
+            }
+            if(e.key === 'ArrowLeft' || e.key === 'ArrowRight') e.preventDefault();
+        });
+        window.addEventListener('keyup', (e) => {
+            if(e.key === 'ArrowLeft') keys.ArrowLeft = false;
+            if(e.key === 'ArrowRight') keys.ArrowRight = false;
+            if(e.key === 'ArrowUp') keys.ArrowUp = false;
+            if(e.key === 'ArrowDown') keys.ArrowDown = false;
+        });
+        
+        // Обновление позиции игрока
+        function updatePlayerLane() {
+            if(!gameRunning) return;
+            if(keys.ArrowLeft && playerLane > 0) playerLane--;
+            if(keys.ArrowRight && playerLane < LANE_COUNT-1) playerLane++;
+            playerX = playerLane * LANE_WIDTH + LANE_WIDTH/2 - 20;
+        }
+        
+        // Отрисовка всего
+        function draw() {
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            // Асфальт и разметка
+            ctx.fillStyle = "#1c2a2f";
+            ctx.fillRect(0,0,canvas.width,canvas.height);
+            for(let i=0;i<LANE_COUNT;i++) {
+                ctx.strokeStyle = "#ffcc44";
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(i*LANE_WIDTH, 0);
+                ctx.lineTo(i*LANE_WIDTH, canvas.height);
+                ctx.stroke();
+            }
+            // Дорожная разметка пунктир
+            ctx.fillStyle = "#ffff99";
+            for(let i=0;i<30;i++) {
+                ctx.fillRect(canvas.width/2-8, (roadOffset + i*45) % canvas.height, 16, 25);
+            }
+            roadOffset += currentSpeed;
+            
+            // Препятствия
+            for(let obs of obstacles) {
+                if(obs.type === 'car') {
+                    ctx.fillStyle = "#aa5544";
+                    ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+                    ctx.fillStyle = "#442211";
+                    ctx.fillRect(obs.x+5, obs.y+5, obs.width-10, 15);
+                } else {
+                    ctx.fillStyle = "#5a3a2a";
+                    ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+                    ctx.fillStyle = "#2f1e12";
+                    ctx.fillRect(obs.x+5, obs.y+8, obs.width-10, 10);
+                }
+            }
+            // Бонусы
+            for(let p of powerups) {
+                if(p.type === 'fuel') {
+                    ctx.fillStyle = "#ffaa44";
+                    ctx.beginPath();
+                    ctx.arc(p.x+15, p.y+15, 14, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.fillStyle = "#fff";
+                    ctx.font="bold 18px monospace";
+                    ctx.fillText("⛽", p.x+5, p.y+23);
+                } else {
+                    ctx.fillStyle = "#ffdd77";
+                    ctx.fillRect(p.x, p.y, p.width, p.width);
+                    ctx.fillStyle = "gold";
+                    ctx.font="18px monospace";
+                    ctx.fillText("💰", p.x+6, p.y+23);
+                }
+            }
+            // Соперники
+            for(let r of rivals) {
+                ctx.fillStyle = "#5a6eaa";
+                ctx.fillRect(r.x, r.y, r.width, r.height);
+                ctx.fillStyle = "#fff";
+                ctx.font = "bold 14px monospace";
+                ctx.fillText("🏍️", r.x+8, r.y+30);
+            }
+            
+            // Игрок — мотоцикл
+            ctx.shadowBlur = 8;
+            ctx.fillStyle = "#ffaa33";
+            ctx.fillRect(playerX, canvas.height-80, 40, 35);
+            ctx.fillStyle = "#dd6611";
+            ctx.fillRect(playerX+12, canvas.height-95, 16, 20);
+            ctx.fillStyle = "black";
+            ctx.fillRect(playerX+5, canvas.height-70, 30, 12);
+            ctx.fillStyle = "#aa8866";
+            ctx.beginPath();
+            ctx.ellipse(playerX+20, canvas.height-50, 18, 12, 0, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = "#ffff88";
+            ctx.font = "22px monospace";
+            ctx.fillText("😎", playerX+10, canvas.height-55);
+            
+            if(nitroBoost) {
+                ctx.fillStyle = "rgba(0,255,200,0.3)";
+                ctx.fillRect(0,0,canvas.width,canvas.height);
+            }
+            
+            // Интерфейс поверх
+            ctx.font = "bold 22px monospace";
+            ctx.fillStyle = "cyan";
+            ctx.fillText(`💨 ${Math.floor(currentSpeed*9)} km/h`, 20, 50);
+            if(!gameRunning) {
+                ctx.font = "bold 36px monospace";
+                ctx.fillStyle = "#ff5555";
+                ctx.fillText("💀 GAME OVER 💀", canvas.width/2-150, canvas.height/2);
+                ctx.font = "18px monospace";
+                ctx.fillStyle = "white";
+                ctx.fillText("Нажми НОВАЯ ГОНКА", canvas.width/2-110, canvas.height/2+60);
+            }
+            ctx.shadowBlur = 0;
+        }
+        
+        function addGameOverMsg() {
+            // просто для лога в консоль
+            console.log("Game over");
+        }
+        
+        // Рестарт
+        function restartGame() {
+            gameRunning = true;
+            health = 3;
+            score = 0;
+            nitro = 100;
+            baseSpeed = 5.4;
+            currentSpeed = baseSpeed;
+            nitroBoost = false;
+            obstacles = [];
+            powerups = [];
+            rivals = [];
+            playerLane = 2;
+            motoLevel = Math.max(1, motoLevel);
+            updateUI();
+        }
+        
+        // Апгрейд мотика
+        function upgradeBike() {
+            if(score >= upgradePrice) {
+                score -= upgradePrice;
+                motoLevel++;
+                upgradePrice = Math.floor(upgradePrice * 1.45);
+                if(motoLevel > 1) {
+                    baseSpeed += 0.55;
+                }
+                health = Math.min(6, health+1);
+                updateUI();
+                addGameOverMsg("Мотоцикл улучшен!");
+            } else {
+                alert("Не хватает очков для апгрейда!");
+            }
+        }
+        
+        function buyNitro() {
+            if(score >= nitroPrice) {
+                score -= nitroPrice;
+                nitro = Math.min(100, nitro + 45);
+                updateUI();
+            } else {
+                alert("Не хватает очков!");
+            }
+        }
+        
+        // Рендер-цикл
+        function gameLoop() {
+            updatePlayerLane();
+            if(gameRunning) updateGame();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Кнопки
+        document.getElementById('resetGameBtn').addEventListener('click', () => { restartGame(); });
+        document.getElementById('upgradeBikeBtn').addEventListener('click', () => { if(!gameRunning) restartGame(); upgradeBike(); });
+        document.getElementById('buyNitroBtn').addEventListener('click', () => { if(!gameRunning) restartGame(); buyNitro(); });
+        
+        updateUI();
+        restartGame();
+        gameLoop();
+    })();
+</script>
+</body>
+</html>
