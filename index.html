@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>⚔️ MOTIK BATTLE ARENA | Мощная игра про мотиков</title>
+    <style>
+        * {
+            user-select: none;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(145deg, #0a0f1e 0%, #0c1222 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', 'Courier New', monospace;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .game-container {
+            background: rgba(0, 0, 0, 0.55);
+            border-radius: 64px;
+            padding: 24px;
+            backdrop-filter: blur(4px);
+            box-shadow: 0 25px 45px rgba(0,0,0,0.5), inset 0 1px 2px rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,215,0,0.3);
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            border-radius: 32px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            cursor: pointer;
+            background: radial-gradient(circle at 30% 20%, #1e2a3a, #0b0f17);
+        }
+
+        .info-panel {
+            margin-top: 20px;
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .stats-card {
+            background: #11161fdd;
+            backdrop-filter: blur(12px);
+            border-radius: 28px;
+            padding: 12px 24px;
+            flex: 1;
+            min-width: 160px;
+            border: 1px solid gold;
+            color: #ffefc0;
+            text-shadow: 0 2px 3px black;
+            font-weight: bold;
+        }
+
+        .motik-name {
+            font-size: 1.5rem;
+            letter-spacing: 2px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #FFD966, #FFB347);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        button {
+            background: #2a2f3f;
+            border: none;
+            color: white;
+            font-weight: bold;
+            padding: 10px 18px;
+            border-radius: 60px;
+            font-family: monospace;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: 0.1s linear;
+            box-shadow: 0 4px 0 #0a0e14;
+            margin: 4px;
+        }
+
+        button:active {
+            transform: translateY(2px);
+            box-shadow: 0 1px 0 #0a0e14;
+        }
+
+        .btn-gold {
+            background: #e4a022;
+            color: #1f1a0c;
+            box-shadow: 0 4px 0 #7a4a0a;
+        }
+
+        .skill-grid {
+            display: flex;
+            gap: 12px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+
+        .log-area {
+            background: #03060cd9;
+            border-radius: 24px;
+            padding: 8px 16px;
+            font-size: 0.8rem;
+            height: 80px;
+            overflow-y: auto;
+            font-family: monospace;
+            color: #bbffaa;
+        }
+
+        @keyframes battleShake {
+            0% { transform: translate(0,0); }
+            25% { transform: translate(4px, -2px); }
+            75% { transform: translate(-3px, 2px); }
+            100% { transform: translate(0,0); }
+        }
+        .shake {
+            animation: battleShake 0.2s ease-in-out 0s 2;
+        }
+        .damage-number {
+            position: absolute;
+            font-size: 28px;
+            font-weight: bold;
+            color: red;
+            text-shadow: 0 0 5px black;
+            pointer-events: none;
+            z-index: 200;
+            animation: floatUp 0.8s ease-out forwards;
+        }
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0px) scale(1);}
+            100% { opacity: 0; transform: translateY(-70px) scale(1.5);}
+        }
+    </style>
+</head>
+<body>
+<div>
+    <div class="game-container">
+        <canvas id="gameCanvas" width="800" height="450" style="width:100%; height:auto; max-width:800px; aspect-ratio:800/450"></canvas>
+        <div class="info-panel">
+            <div class="stats-card">
+                🧬 <span id="currentMotikName">МОТИК</span><br>
+                ❤️ HP: <span id="hpValue">0</span>/<span id="maxHpValue">0</span><br>
+                ⚔️ АТК: <span id="atkValue">0</span> | 🛡️ БРОНЯ: <span id="armorValue">0</span><br>
+                ⭐ УРОВЕНЬ: <span id="lvlValue">0</span> | ✨ ОПЫТ: <span id="expValue">0</span>
+            </div>
+            <div class="stats-card">
+                🧙‍♂️ Шмотки 💎<br>
+                🔥 Сила клинка +<span id="itemAtk">0</span><br>
+                🧤 Броня предков +<span id="itemArmor">0</span><br>
+                💰 Монет: <span id="coins">0</span>
+            </div>
+        </div>
+        <div class="skill-grid">
+            <button id="attackBtn">⚡ АТАКА (урон)</button>
+            <button id="healBtn">💊 Лечиться (15 монет)</button>
+            <button id="upgradeAtkBtn">🗡️ Купить силу +2 (30 монет)</button>
+            <button id="upgradeArmorBtn">🛡️ Купить броню +2 (30 монет)</button>
+            <button id="resetBtn">🔄 Сброс игры</button>
+        </div>
+        <div class="log-area" id="combatLog">
+            🎮 Добро пожаловать в MOTIK BATTLE ARENA!<br>
+            💪 Твой мотик сражается с дикими мотиками!
+        </div>
+    </div>
+</div>
+
+<script>
+    (function(){
+        // ---------- МОЩНАЯ БОЛЬШАЯ СИСТЕМА МОТИКОВ ----------
+        // БАЗА ВСЕХ МОТИКОВ (можно расширять до бесконечности)
+        const MOTIK_DB = [
+            { name: "🔥 Огнемотик",    baseHp: 120, baseAtk: 22, baseArmor: 4, expReward: 35, coinReward: 25, color: "#ff6b4a", icon: "🔥" },
+            { name: "❄️ Ледомотик",    baseHp: 100, baseAtk: 19, baseArmor: 6, expReward: 32, coinReward: 22, color: "#6ac4ff", icon: "❄️" },
+            { name: "🌿 Древомотик",   baseHp: 150, baseAtk: 14, baseArmor: 9, expReward: 40, coinReward: 30, color: "#6fbf4c", icon: "🌿" },
+            { name: "⚡ Электромотик", baseHp: 95,  baseAtk: 28, baseArmor: 2, expReward: 38, coinReward: 28, color: "#ffe570", icon: "⚡" },
+            { name: "🪨 Камнемотик",   baseHp: 180, baseAtk: 16, baseArmor: 12,expReward: 45, coinReward: 35, color: "#b0a07c", icon: "🪨" },
+            { name: "💀 Тенемотик",    baseHp: 90,  baseAtk: 32, baseArmor: 1, expReward: 48, coinReward: 40, color: "#6a4e9b", icon: "💀" },
+            { name: "✨ Сияющий мотик",baseHp: 130, baseAtk: 24, baseArmor: 5, expReward: 55, coinReward: 45, color: "#ffdd88", icon: "✨" }
+        ];
+
+        // Игрок (прогрессирующий мотик)
+        let player = {
+            name: "⭐ Легендарный Мотик",
+            level: 1,
+            exp: 0,
+            baseHp: 110,
+            baseAtk: 20,
+            baseArmor: 3,
+            currentHp: 110,
+            coins: 100,
+            itemAtkBonus: 0,
+            itemArmorBonus: 0,
+            totalKills: 0
+        };
+
+        let currentEnemy = null;
+        let animationQueue = [];
+        let canvas = document.getElementById('gameCanvas');
+        let ctx = canvas.getContext('2d');
+        
+        // Вспомогательные функции
+        function recalcPlayerStats() {
+            let totalAtk = player.baseAtk + player.itemAtkBonus;
+            let totalArmor = player.baseArmor + player.itemArmorBonus;
+            let maxHp = player.baseHp;
+            return { totalAtk, totalArmor, maxHp };
+        }
+
+        function updateUI() {
+            let stats = recalcPlayerStats();
+            document.getElementById('currentMotikName').innerHTML = `${player.name} (Lv.${player.level})`;
+            document.getElementById('hpValue').innerText = player.currentHp;
+            document.getElementById('maxHpValue').innerText = stats.maxHp;
+            document.getElementById('atkValue').innerText = stats.totalAtk;
+            document.getElementById('armorValue').innerText = stats.totalArmor;
+            document.getElementById('lvlValue').innerText = player.level;
+            document.getElementById('expValue').innerText = player.exp;
+            document.getElementById('coins').innerText = player.coins;
+            document.getElementById('itemAtk').innerText = player.itemAtkBonus;
+            document.getElementById('itemArmor').innerText = player.itemArmorBonus;
+        }
+
+        function addLog(msg) {
+            let logDiv = document.getElementById('combatLog');
+            let p = document.createElement('div');
+            p.innerHTML = msg;
+            logDiv.appendChild(p);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            while(logDiv.children.length > 18) logDiv.removeChild(logDiv.firstChild);
+        }
+
+        function showDamageNumber(x, y, dmg, isCrit=false) {
+            let div = document.createElement('div');
+            div.className = 'damage-number';
+            div.innerText = `${isCrit ? '💥 CRIT! ' : ''}${Math.floor(dmg)}`;
+            div.style.position = 'fixed';
+            div.style.left = (x + (Math.random() * 40 - 20)) + 'px';
+            div.style.top = (y + (Math.random() * 30)) + 'px';
+            div.style.color = isCrit ? '#ffaa44' : '#ff5555';
+            div.style.fontSize = isCrit ? '34px' : '28px';
+            document.body.appendChild(div);
+            setTimeout(() => div.remove(), 800);
+        }
+
+        function shakeCanvas() {
+            let gameCanvas = document.getElementById('gameCanvas');
+            gameCanvas.classList.add('shake');
+            setTimeout(() => gameCanvas.classList.remove('shake'), 250);
+        }
+        
+        // Создание врага (рандомный мотик)
+        function spawnEnemy() {
+            let idx = Math.floor(Math.random() * MOTIK_DB.length);
+            let template = MOTIK_DB[idx];
+            let lvlScale = 1 + (player.level - 1) * 0.12;
+            let enemyHp = Math.floor(template.baseHp * lvlScale);
+            let enemyAtk = Math.floor(template.baseAtk * lvlScale);
+            let enemyArmor = Math.max(1, Math.floor(template.baseArmor * (0.9 + player.level*0.03)));
+            currentEnemy = {
+                name: template.name,
+                icon: template.icon,
+                hp: enemyHp,
+                maxHp: enemyHp,
+                atk: enemyAtk,
+                armor: enemyArmor,
+                expReward: Math.floor(template.expReward * (1 + player.level*0.1)),
+                coinReward: Math.floor(template.coinReward * (1 + player.level*0.08)),
+                color: template.color
+            };
+            addLog(`😈 Дикий ${currentEnemy.icon} ${currentEnemy.name} (Ур.мод ${Math.floor(lvlScale*10)/10}) появился! HP ${currentEnemy.hp} | АТК ${currentEnemy.atk}`);
+            drawBattle();
+        }
+
+        // Проверка повышения уровня
+        function checkLevelUp() {
+            let neededExp = 50 + (player.level-1) * 28;
+            let leveled = false;
+            while(player.exp >= neededExp) {
+                player.exp -= neededExp;
+                player.level++;
+                player.baseHp = Math.floor(110 + (player.level-1)*12);
+                player.baseAtk = Math.floor(20 + (player.level-1)*4);
+                player.baseArmor = Math.floor(3 + (player.level-1)*2);
+                let newMax = player.baseHp;
+                player.currentHp = newMax;
+                neededExp = 50 + (player.level-1) * 28;
+                leveled = true;
+                addLog(`✨🌟 ПОВЫШЕНИЕ УРОВНЯ! Теперь ты Lv.${player.level}! 🌟✨`);
+                addLog(`❤️ Здоровье +${player.baseHp}, ⚔️ Атака +${player.baseAtk}, 🛡️ Броня +${player.baseArmor}`);
+            }
+            if(leveled) {
+                updateUI();
+                drawBattle();
+            }
+        }
+
+        // Атака игрока на врага
+        function playerAttack() {
+            if(!currentEnemy || currentEnemy.hp <= 0) {
+                addLog("⚠️ Нет врага! Нажми бой породит нового.");
+                if(!currentEnemy || currentEnemy.hp <=0) spawnEnemy();
+                return;
+            }
+            let stats = recalcPlayerStats();
+            let damage = Math.floor(stats.totalAtk + Math.random() * 8);
+            let isCrit = Math.random() < 0.13; // 13% крит
+            if(isCrit) damage = Math.floor(damage * 1.8);
+            let finalDamage = Math.max(4, damage - currentEnemy.armor);
+            currentEnemy.hp -= finalDamage;
+            
+            let canvasRect = canvas.getBoundingClientRect();
+            let x = canvasRect.left + canvasRect.width * 0.7;
+            let y = canvasRect.top + canvasRect.height * 0.4;
+            showDamageNumber(x, y, finalDamage, isCrit);
+            shakeCanvas();
+            addLog(`💥 Ты атакуешь ${currentEnemy.icon} ${currentEnemy.name} на ${finalDamage} урона! ${isCrit ? 'КРИТИЧЕСКИ!!' : ''}`);
+            
+            if(currentEnemy.hp <= 0) {
+                addLog(`🏆 ПОБЕДА! +${currentEnemy.expReward} опыта, +${currentEnemy.coinReward} монет.`);
+                player.exp += currentEnemy.expReward;
+                player.coins += currentEnemy.coinReward;
+                player.totalKills++;
+                checkLevelUp();
+                updateUI();
+                spawnEnemy();
+                return;
+            }
+            updateUI();
+            drawBattle();
+            // Враг отвечает
+            setTimeout(() => enemyTurn(), 380);
+        }
+
+        function enemyTurn() {
+            if(!currentEnemy || currentEnemy.hp <= 0) return;
+            let stats = recalcPlayerStats();
+            let enemyDamage = Math.max(3, Math.floor(currentEnemy.atk + Math.random() * 7) - stats.totalArmor);
+            let isCritEnemy = Math.random() < 0.1;
+            if(isCritEnemy) enemyDamage = Math.floor(enemyDamage * 1.6);
+            player.currentHp -= enemyDamage;
+            let canvasRect = canvas.getBoundingClientRect();
+            let x = canvasRect.left + canvasRect.width * 0.25;
+            let y = canvasRect.top + canvasRect.height * 0.55;
+            showDamageNumber(x, y, enemyDamage, isCritEnemy);
+            shakeCanvas();
+            addLog(`😤 ${currentEnemy.icon} ${currentEnemy.name} атакует тебя на ${enemyDamage} урона! ${isCritEnemy ? 'КРИТАН по тебе!' : ''}`);
+            if(player.currentHp <= 0) {
+                player.currentHp = 0;
+                addLog(`💀💀 ТВОЙ МОТИК ПОВЕРЖЕН! Игра перезапускается... 💀💀`);
+                resetGame();
+                return;
+            }
+            updateUI();
+            drawBattle();
+        }
+
+        function healAction() {
+            if(player.coins < 15) {
+                addLog("💰 Не хватает монет для лечения! (нужно 15)");
+                return;
+            }
+            let stats = recalcPlayerStats();
+            if(player.currentHp >= stats.maxHp) {
+                addLog("❤️ У тебя уже полное здоровье!");
+                return;
+            }
+            player.coins -= 15;
+            let healAmount = Math.floor(28 + player.level * 6);
+            player.currentHp = Math.min(stats.maxHp, player.currentHp + healAmount);
+            addLog(`💚 Лечение +${healAmount} HP! (стоило 15 монет)`);
+            updateUI();
+            drawBattle();
+            if(currentEnemy && currentEnemy.hp > 0) setTimeout(() => enemyTurn(), 300);
+        }
+
+        function upgradeAtk() {
+            if(player.coins >= 30) {
+                player.coins -= 30;
+                player.itemAtkBonus += 2;
+                addLog(`🗡️ Сила увеличена на +2 (теперь бонус +${player.itemAtkBonus})`);
+                updateUI();
+                drawBattle();
+            } else addLog("Монет мало, нужно 30 для улучшения атаки");
+        }
+        
+        function upgradeArmor() {
+            if(player.coins >= 30) {
+                player.coins -= 30;
+                player.itemArmorBonus += 2;
+                addLog(`🛡️ Броня увеличена на +2 (теперь бонус +${player.itemArmorBonus})`);
+                updateUI();
+                drawBattle();
+            } else addLog("Монет мало, нужно 30 для улучшения защиты");
+        }
+        
+        function resetGame() {
+            player = {
+                name: "⭐ Легендарный Мотик",
+                level: 1,
+                exp: 0,
+                baseHp: 110,
+                baseAtk: 20,
+                baseArmor: 3,
+                currentHp: 110,
+                coins: 100,
+                itemAtkBonus: 0,
+                itemArmorBonus: 0,
+                totalKills: 0
+            };
+            updateUI();
+            spawnEnemy();
+            addLog("♻️ Игра сброшена! Начинай новое приключение.");
+        }
+
+        // Рисование графики
+        function drawBattle() {
+            if(!canvas || !ctx) return;
+            ctx.clearRect(0,0,800,450);
+            // Фон
+            ctx.fillStyle = "#102020";
+            ctx.fillRect(0,0,800,450);
+            ctx.fillStyle = "#284848";
+            for(let i=0;i<60;i++) {
+                ctx.beginPath();
+                ctx.arc(80+Math.random()*700, 60+Math.random()*350, Math.random()*3,0,Math.PI*2);
+                ctx.fillStyle = `rgba(200,220,150,${Math.random()*0.5})`;
+                ctx.fill();
+            }
+            // Игрок (слева)
+            ctx.font = "bold 32px monospace";
+            ctx.fillStyle = "#ffe0a3";
+            ctx.shadowBlur=0;
+            ctx.fillText("🧸 МОТИК", 70, 70);
+            let stats = recalcPlayerStats();
+            ctx.font = "24px monospace";
+            ctx.fillStyle = "#ffdd99";
+            ctx.fillText(`❤️ ${player.currentHp}/${stats.maxHp}`, 70, 130);
+            ctx.fillStyle = "#ffb347";
+            ctx.fillText(`⚔️ ${stats.totalAtk}  🛡️ ${stats.totalArmor}`, 70, 180);
+            ctx.fillStyle = "gold";
+            ctx.font = "26px monospace";
+            ctx.fillText(`Lv.${player.level}`, 75, 240);
+            
+            // Враг (справа)
+            if(currentEnemy) {
+                let hpPercent = currentEnemy.hp / currentEnemy.maxHp;
+                ctx.fillStyle = currentEnemy.color;
+                ctx.font = "bold 34px monospace";
+                ctx.fillText(`${currentEnemy.icon} ${currentEnemy.name}`, 480, 80);
+                ctx.fillStyle = "#ffaa88";
+                ctx.font = "26px monospace";
+                ctx.fillText(`❤️ ${currentEnemy.hp}/${currentEnemy.maxHp}`, 490, 140);
+                ctx.fillStyle = "#ff8877";
+                ctx.fillText(`⚔️ ${currentEnemy.atk}  🛡️ ${currentEnemy.armor}`, 490, 200);
+                ctx.fillStyle = "#ffbb66";
+                ctx.fillRect(490, 250, 200 * hpPercent, 18);
+                ctx.strokeStyle = "black";
+                ctx.strokeRect(490,250,200,18);
+                ctx.fillStyle = "white";
+                ctx.fillText(`🏆 +${currentEnemy.expReward} опыта`, 495, 310);
+            } else {
+                ctx.fillStyle = "gray";
+                ctx.fillText("??? Нет врага, жми атаку", 480, 150);
+            }
+            ctx.font = "18px monospace";
+            ctx.fillStyle = "#ddccaa";
+            ctx.fillText(`💰 ${player.coins} монет | убито: ${player.totalKills}`, 30, 410);
+        }
+        
+        // Инициализация игры + кнопки
+        window.addEventListener('load', () => {
+            resetGame();  // задаст врага
+            document.getElementById('attackBtn').addEventListener('click', () => playerAttack());
+            document.getElementById('healBtn').addEventListener('click', () => healAction());
+            document.getElementById('upgradeAtkBtn').addEventListener('click', () => upgradeAtk());
+            document.getElementById('upgradeArmorBtn').addEventListener('click', () => upgradeArmor());
+            document.getElementById('resetBtn').addEventListener('click', () => resetGame());
+            setInterval(() => drawBattle(), 200);
+        });
+    })();
+</script>
+</body>
+</html>
